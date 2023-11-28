@@ -25,15 +25,10 @@ def get_qap(x, y):
     # Convert each matrix into polynomial matrices U V W using Lagrange on xs = [1,2,3] and each column of the matrices
     xs = np.array([1,2,3])
     # ---- Matrix A ----
-    xs = np.array([1,2,3])
-    # print(lagrange(xs, [3,0,1])) # 2x^2 - 9x + 10 
-    # print(lagrange(xs, [0,1,0])) # -1x^2 + 4 x - 3
     U = np.array([[0,0,2,0,-1,0],
                 [0,0,-9,0,4,0],
                 [0,0,10,0,-3,0]])
     # ---- Matrix B ----
-    # print(lagrange(xs, [1,0,0])) # 0.5 x^2 - 2.5 x + 3
-    # print(lagrange(xs, [0,1,5])) # 1.5 x^2 - 3.5 x + 2
     V = np.array([[0,0,0.5,1.5,0,0],
                 [0,0,-2.5,-3.5,0,0],
                 [0,0,3,2,0,0]])
@@ -80,7 +75,6 @@ def get_qap(x, y):
 
     return Uwp, Vwp, Wwp, hp, tp
 
-
 def trusted_setup(degrees, t):
     degrees_of_t = t.order
     tau = random.randint(1,1000) 
@@ -97,11 +91,11 @@ def inner_product(powers_of_tau, coeffs, z):
         sum = add(sum, pdt)
     return sum
 
-# Verification step
-def test_verifier(accounts):
+def test_verify(accounts):
     x = random.randint(1, 1000)
     y = random.randint(1, 1000)
     U, V, W, h, t = get_qap(x,y)
+
     powers_of_tau_1, powers_of_tau_2, t_tau_1 = trusted_setup(U.order, t)
 
     A1 = inner_product(powers_of_tau_1, U.coef[::-1], Z1)
@@ -110,7 +104,6 @@ def test_verifier(accounts):
     HT1 = inner_product(t_tau_1, h.coef[::-1], Z1)
     C1 = add(C_prime_1, HT1)
 
-    print(A1)
     A1_str = [repr(el) for el in A1]
     B2_str = [[repr(el.coeffs[0]), repr(el.coeffs[1])] for el in B2]
     C1_str = [repr(el) for el in C1]
