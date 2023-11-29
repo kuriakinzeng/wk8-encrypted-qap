@@ -4,47 +4,53 @@ Using q3 from hw6
 
 import numpy as np
 from scipy.interpolate import lagrange
-from py_ecc.bn128 import G1, G2, add, multiply, curve_order, eq, Z1, Z2
+from py_ecc.bn128 import G1, G2, add, multiply, curve_order, eq, Z1, Z2, FQ, FQ2
 from ape import accounts, project
+import galois
 import random
 
+GF = galois.GF(curve_order)
+
 def get_qap(x, y):
+    def remove_negatives(row):
+        return [curve_order+el if el < 0 else el for el in row] 
+
     # Define the matrices
-    A = np.array([[0,0,3,0,0,0],
-                [0,0,0,0,1,0],
-                [0,0,1,0,0,0]])
+    A = GF(np.apply_along_axis(remove_negatives, 1, np.array([[0,0,3,0,0,0],
+                                                        [0,0,0,0,1,0],
+                                                        [0,0,1,0,0,0]])))
 
-    B = np.array([[0,0,1,0,0,0],
-                [0,0,0,1,0,0],
-                [0,0,0,5,0,0]])
+    B = GF(np.apply_along_axis(remove_negatives, 1, np.array([[0,0,1,0,0,0],
+                                                        [0,0,0,1,0,0],
+                                                        [0,0,0,5,0,0]])))
+    
+    # np.apply_along_axis on C resulted in OverflowError: Python int too large to convert to C long
+    C_raw = np.array([[0,0,0,0,1,0],
+                  [0,0,0,0,0,1],
+                  [-3,1,1,2,0,-1]])
+    C = GF([remove_negatives(row) for row in C_raw])
 
-    C = np.array([[0,0,0,0,1,0],
-                [0,0,0,0,0,1],
-                [-3,1,1,2,0,-1]])
+    # Compute the witness
+    x = GF(x)
+    y = GF(y)
+    v1 = GF(3)*x*x
+    v2 = v1 * y
+    out = GF(3)*x*x*y + GF(5)*x*y + GF(curve_order-1)*x + GF(curve_order-2)*y + GF(3) # out = 3x^2y + 5xy - x - 2y + 3
+    w = GF(np.array([1, out, x, y, v1, v2]))
+
+    # Sanity check
+    assert np.all(np.equal(A.dot(w) * B.dot(w), C.dot(w))), "Aw * Bw != Cw"
 
     # Convert each matrix into polynomial matrices U V W using Lagrange on xs = [1,2,3] and each column of the matrices
-    xs = np.array([1,2,3])
-    # ---- Matrix A ----
-    U = np.array([[0,0,2,0,-1,0],
-                [0,0,-9,0,4,0],
-                [0,0,10,0,-3,0]])
-    # ---- Matrix B ----
-    V = np.array([[0,0,0.5,1.5,0,0],
-                [0,0,-2.5,-3.5,0,0],
-                [0,0,3,2,0,0]])
-    # ---- Matrix C ----
-    # We can only do this when none of the elements in each column is zero. 
-    # There is probably a better way to make this work for A and B as well 
-    def interpolate_no_zero(col):
-        return lagrange(xs, col) 
-    W = np.apply_along_axis(interpolate_no_zero, 0, C)
+    def interpolate_col(col):
+        xs = GF(np.array([1,2,3]))
+        return galois.lagrange_poly(xs, col)
+
+    U = np.apply_along_axis(interpolate_col, 0, A)
+    V = np.apply_along_axis(interpolate_col, 0, B)
+    W = np.apply_along_axis(interpolate_col, 0, C)
 
     # Compute Uw, Vw and Ww 
-    out = 3 * x * x * y + 5 * x * y - x- 2*y + 3 # out = 3x^2y + 5xy - x - 2y + 3
-    v1 = 3*x*x
-    v2 = v1 * y
-    w = np.array([1, out, x, y, v1, v2])
-
     Uw = U.dot(w)
     Vw = V.dot(w)
     Ww = W.dot(w)
@@ -64,30 +70,27 @@ def get_qap(x, y):
     # => -44x^4 + 289x^3 - 634x^2 + 539x - 150 / (x^3 - 6x^2 + 11x - 6)
     # => -44x + 25
 
-    Uwp = np.poly1d(Uw)
-    Vwp = np.poly1d(Vw)
-    Wwp = np.poly1d(Ww)
-    tp = np.poly1d([1,-1]) * np.poly1d([1,-2]) * np.poly1d([1,-3])
-    (hp, r) = (Uwp * Vwp - Wwp) / tp
+    t = galois.Poly([1, curve_order-1], field=GF) * galois.Poly([1, curve_order-2], field=GF) * galois.Poly([1, curve_order-3], field=GF)
+    h = (Uw * Vw - Ww) // t
 
     # The equation is then Uwp Vwp = Wwp + hp tp
-    assert Uwp * Vwp == Wwp + hp * tp, "Uw * Vw != Ww + h(x)t(x)"
+    assert Uw * Vw == Ww + h * t, "Uw * Vw != Ww + h(x)t(x)"
 
-    return Uwp, Vwp, Wwp, hp, tp
+    return Uw, Vw, Ww, h, t
 
 def trusted_setup(degrees, t):
-    degrees_of_t = t.order
-    tau = random.randint(1,1000) 
-    powers_of_tau_1 = [multiply(G1,tau**i) for i in range(degrees + 1)]
-    powers_of_tau_2 = [multiply(G2,tau**i) for i in range(degrees + 1)]
-    t_tau_1 = [multiply(G1, tau**i * t(tau)) for i in range(degrees_of_t)]
+    degrees_of_t = t.degree
+    tau = GF(random.randint(1,1000))
+    powers_of_tau_1 = [multiply(G1,int(tau**i)) for i in range(degrees + 1)]
+    powers_of_tau_2 = [multiply(G2,int(tau**i)) for i in range(degrees + 1)]
+    t_tau_1 = [multiply(G1, int(tau**i * t(tau))) for i in range(degrees_of_t)]
     return powers_of_tau_1, powers_of_tau_2, t_tau_1
 
 def inner_product(powers_of_tau, coeffs, z):
+    print(powers_of_tau, coeffs)
     sum = z
     for i in range(len(coeffs)):
-        # coefficients have to mod curve_order so that it can be used with EC
-        pdt = multiply(powers_of_tau[i], coeffs[i] % curve_order)
+        pdt = multiply(powers_of_tau[i], int(coeffs[i]))
         sum = add(sum, pdt)
     return sum
 
@@ -96,12 +99,12 @@ def test_verify(accounts):
     y = random.randint(1, 1000)
     U, V, W, h, t = get_qap(x,y)
 
-    powers_of_tau_1, powers_of_tau_2, t_tau_1 = trusted_setup(U.order, t)
+    powers_of_tau_1, powers_of_tau_2, t_tau_1 = trusted_setup(U.degree, t)
 
-    A1 = inner_product(powers_of_tau_1, U.coef[::-1], Z1)
-    B2 = inner_product(powers_of_tau_2, V.coef[::-1], Z2)
-    C_prime_1 = inner_product(powers_of_tau_1, W.coef[::-1], Z1) # This is [C']_1 in the question
-    HT1 = inner_product(t_tau_1, h.coef[::-1], Z1)
+    A1 = inner_product(powers_of_tau_1, U.coeffs[::-1], Z1)
+    B2 = inner_product(powers_of_tau_2, V.coeffs[::-1], Z2)
+    C_prime_1 = inner_product(powers_of_tau_1, W.coeffs[::-1], Z1) # This is [C']_1 in the question
+    HT1 = inner_product(t_tau_1, h.coeffs[::-1], Z1)
     C1 = add(C_prime_1, HT1)
 
     A1_str = [repr(el) for el in A1]
