@@ -3,8 +3,7 @@ Using q3 from hw6
 '''
 
 import numpy as np
-from scipy.interpolate import lagrange
-from py_ecc.bn128 import G1, G2, add, multiply, curve_order, eq, Z1, Z2, FQ, FQ2
+from py_ecc.bn128 import G1, G2, add, multiply, curve_order, eq, Z1, Z2
 from ape import accounts, project
 import galois
 import random
