@@ -80,14 +80,13 @@ def get_qap(x, y):
 
 def trusted_setup(degrees, t):
     degrees_of_t = t.degree
-    tau = GF(random.randint(1,1000))
+    tau = GF(random.randint(1,curve_order-1))
     powers_of_tau_1 = [multiply(G1,int(tau**i)) for i in range(degrees + 1)]
     powers_of_tau_2 = [multiply(G2,int(tau**i)) for i in range(degrees + 1)]
     t_tau_1 = [multiply(G1, int(tau**i * t(tau))) for i in range(degrees_of_t)]
     return powers_of_tau_1, powers_of_tau_2, t_tau_1
 
 def inner_product(powers_of_tau, coeffs, z):
-    print(powers_of_tau, coeffs)
     sum = z
     for i in range(len(coeffs)):
         pdt = multiply(powers_of_tau[i], int(coeffs[i]))
