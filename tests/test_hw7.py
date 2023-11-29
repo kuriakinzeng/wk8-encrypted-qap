@@ -65,25 +65,21 @@ def get_qap(x, y):
     # because the matrix is just a representation of the stacked polynomials. 
     # We have a homomorphism from column vectors to polynomials
     # where the multiplication (operation) in polynomials is different
-    # We need to do it in polynomial form
-    # => (-8x^2 + 30x - 16) * (5.5x^2 - 15.5x + 12) - (-15x^2 + 69x - 42) / (x-1)(x-2)(x-3)
-    # => -44x^4 + 289x^3 - 634x^2 + 539x - 150 / (x^3 - 6x^2 + 11x - 6)
-    # => -44x + 25
+    # We need to do symbolic calculation it in polynomial form
 
     t = galois.Poly([1, curve_order-1], field=GF) * galois.Poly([1, curve_order-2], field=GF) * galois.Poly([1, curve_order-3], field=GF)
     h = (Uw * Vw - Ww) // t
 
-    # The equation is then Uwp Vwp = Wwp + hp tp
+    # The equation is then Uw Vw = Ww + h t
     assert Uw * Vw == Ww + h * t, "Uw * Vw != Ww + h(x)t(x)"
 
     return Uw, Vw, Ww, h, t
 
 def trusted_setup(degrees, t):
-    degrees_of_t = t.degree
-    tau = GF(random.randint(1,curve_order-1))
+    tau = GF(random.randint(1,curve_order-1)) 
     powers_of_tau_1 = [multiply(G1,int(tau**i)) for i in range(degrees + 1)]
     powers_of_tau_2 = [multiply(G2,int(tau**i)) for i in range(degrees + 1)]
-    t_tau_1 = [multiply(G1, int(tau**i * t(tau))) for i in range(degrees_of_t)]
+    t_tau_1 = [multiply(G1, int(tau**i * t(tau))) for i in range(t.degree)]
     return powers_of_tau_1, powers_of_tau_2, t_tau_1
 
 def inner_product(powers_of_tau, coeffs, z):
